@@ -2,8 +2,8 @@ from torch import nn
 import torch
 
 class Attention(nn.Module):
-    def __init__(self, feature_dim, step_dim, bias=True, **kwargs):
-        super(Attention, self).__init__(**kwargs)
+    def __init__(self, feature_dim, step_dim, bias=True):
+        super(Attention, self).__init__()
         
         self.supports_masking = True
 
