@@ -1,17 +1,19 @@
-from .utils import ParlDataset, Engine
+from .utils_timeLSTM import ParlDataset, Engine
 import numpy as np
 from torch.utils.data import DataLoader
 import torch
 import optuna
 
 # import model of choice
-from .lstm_mlp import LSTM_MLP
+from .timeLSTM_MLP_attention import TimeLSTM_ATT_MLP
 
 folder_path = 'gdrive/MyDrive/parl_vote_dataset/'
 feature_path = folder_path+'meaned_LSTM_sentBertFeatures.npy'
+timestamp_path = folder_path+'featureTimeStamps.npy'
 label_path = folder_path+'meaned_LSTM_sentBertLabels.npy'
 
 X = np.load(feature_path)
+t = np.load(timestamp_path)
 y = np.load(label_path)
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -19,26 +21,24 @@ EPOCHS = 100
 
 def objective(trial):
     params = {
-        'lstm_layers': trial.suggest_int('lstm_layers', 1, 3),
-        'num_layers': trial.suggest_int('num_layers', 1, 3),
+        'num_layers': trial.suggest_int('num_layers', 1, 6),
         'lstm_hidden_size': trial.suggest_int('lstm_hidden_size', 18, 768),
         'hidden_size': trial.suggest_int('hidden_size', 18, 768),
         'dropout': trial.suggest_uniform('dropout', 0.1, 0.7),
         'learning_rate': trial.suggest_loguniform('learning_rate', 1e-5, 1e-3),
 
     }
+
     return run_training(params, False)
 
 def run_training(params, save_model=False):
-    train_ds = ParlDataset(X[0:-5500], y[0:-5500])
-    val_ds = ParlDataset(X[-5500:-2000], y[-5500:-2000])
+    train_ds = ParlDataset(X[0:-5500], t[0:-5500], y[0:-5500])
+    val_ds = ParlDataset(X[-5500:-2000], t[-5500:-2000], y[-5500:-2000])
 
     train_dl = DataLoader(train_ds, batch_size=128, shuffle=True)
     val_dl = DataLoader(val_ds, batch_size=128, shuffle=True)
 
-    #initialize model of choice
-    model = LSTM_MLP(  
-                    lstm_layers=params['lstm_layers'], 
+    model = TimeLSTM_ATT_MLP(  
                     hidden_size=params['hidden_size'],
                     lstm_hidden_size=params['lstm_hidden_size'],
                     dropout=params['dropout'],
@@ -62,7 +62,7 @@ def run_training(params, save_model=False):
         if valid_loss < best_loss:
             best_loss = valid_loss
             if save_model:
-                torch.save(model.state_dict(), folder_path+"best_lstm_model.bin")
+                torch.save(model.state_dict(), folder_path+"best_timelstm_att_model.bin")
         
         else:
             early_stopping_counter += 1
@@ -74,7 +74,7 @@ def run_training(params, save_model=False):
 
 def main():
     study = optuna.create_study(direction='minimize')
-    study.optimize(objective, n_trials=20)
+    study.optimize(objective, n_trials=40)
 
     trial_ = study.best_trial
 
